@@ -18,35 +18,44 @@ namespace Forces
 	/// </summary>
 	public partial class MainForm : Form
 	{
-      public int cellNumber = 10;
+      public int particlesNumber = 10;
       public const int BORDR = 20;
       private double dumpFactor = 0.99;
       
-      List<Cell> cells = new List<Cell>();
+      List<Particle> particles = new List<Particle>();
     
       public int maxx { get { return panel1.Width; } }
       public int maxy { get { return panel1.Height; } }
 
       public static Random rnd = new Random();
-      int x0 = 3, y0 = 1;
 
-      public void InitCells(int sb)
+      public void InitParticles()
       {  
          int tries = 1000;
-         while (cells.Count > sb)
-            cells.RemoveAt(0);
+         while (particles.Count > particlesNumber)
+            particles.RemoveAt(0);
          
-         while (cells.Count < sb && tries-- > 0)
+         while (particles.Count < particlesNumber && tries-- > 0)
          {
 //         	int ix = maxx/3 + rnd.Next(maxx/3);
 //            int iy = maxy/3 + rnd.Next(maxy/3);
          	int ix = rnd.Next(maxx);
             int iy = rnd.Next(maxy);
             
-            cells.Add(new Cell(this, ix, iy));
+            particles.Add(new Particle(ix, iy, 7+rnd.Next(6)));
          } 
       }
 
+      public void DrawCircle(Graphics gr, Pen pn, int x0, int y0, int r)
+      {
+         gr.DrawEllipse(pn, x0 - r, y0 - r, r+r, r+r);
+      }
+      
+      public void FillCircle(Graphics gr, Brush br, int x0, int y0, int r)
+      {
+         gr.FillEllipse(br, x0 - r, y0 - r, r+r, r+r);
+      }
+      
    Bitmap bmp = null;
    public void show(Graphics gr)
    {
@@ -58,30 +67,27 @@ namespace Forces
       bgr.FillRectangle(new SolidBrush(panel1.BackColor), panel1.ClientRectangle);
       
       double midx = 0, midy = 0;
-      int d = 10, k = 4;
-      foreach(Cell c in cells)
+      int k = 4;
+      foreach(Particle p in particles)
       {
-         bgr.FillEllipse(new SolidBrush(c.clr), (int)c.x - d/2, (int)c.y - d/2, d, d);
-         bgr.DrawEllipse(pn1, (int)c.x - d/2, (int)c.y - d/2, d, d);
-         bgr.DrawLine(pn2, (int)c.x, (int)c.y, (int)(c.x + k * c.dx), (int)(c.y + k * c.dy));
-         midx += c.x;
-         midy += c.y;
+         FillCircle(bgr, new SolidBrush(p.clr), (int)p.x, (int)p.y, p.d/2);
+         DrawCircle(bgr, pn1, (int)p.x, (int)p.y, p.d/2);
+         bgr.DrawLine(pn2, (int)p.x, (int)p.y, (int)(p.x + k * p.dx), (int)(p.y + k * p.dy));
+         midx += p.x;
+         midy += p.y;
       }
 
-      if (x0 + (int)(midx / cells.Count) > 0 && y0 + (int)(midy / cells.Count) > 0)
-{
-//      Console.SetCursorPosition(x0 + (int)(midx / cells.Count) , y0 + (int)(midy / cells.Count));
-//      Console.Write("#");
-}
       gr.DrawImageUnscaled(bmp, 0, 0);
-//      lblInfo.Text = string.Format("{0} {1}", x0 + (int)(midx / cells.Count) , y0 + (int)(midy / cells.Count));
-//gr.DrawLine(Pens.LightGray, 0, 0, Math.Min(maxx, maxy), Math.Min(maxx, maxy));
+//      #if (DEBUG)
+//      { gr.DrawLine(Pens.LightGray, 0, 0, Math.Min(maxx, maxy), Math.Min(maxx, maxy)); }
+//      #endif
+//      }
    }
 
-   public double Force(Cell c0, Cell c1)   
+   public double Force(Particle p0, Particle p1)   
    {
-      double dx = Math.Abs(c0.x - c1.x);
-      double dy = Math.Abs(c0.y - c1.y);
+      double dx = Math.Abs(p0.x - p1.x);
+      double dy = Math.Abs(p0.y - p1.y);
       
       double d;
       if (cbWrap.Checked)
@@ -90,7 +96,7 @@ namespace Forces
          if (dy > maxy / 2) dy = maxy - dy;
       }
       d = (dx * dx + dy * dy);
-       if (d < 10e-6) d = 10e-6;
+      if (d < 10e-8) d = 10e-8;
        return (20.0 / d);
    }
 
@@ -99,43 +105,48 @@ namespace Forces
       double moved = 0;
       double sfx, sfy;
       double f;
-      Cell c1;
-      for(int i = 0; i < cells.Count; i++)
+      Particle c1;
+      for(int i = 0; i < particles.Count; i++)
       {
          sfx = 0;
          sfy = 0;
-         Cell c0 = cells[i];
-         for(int j = 0; j < cells.Count; j++)
+         Particle c0 = particles[i];
+         for(int j = 0; j < particles.Count; j++)
          {
             if (j != i)
             {
-	           c1 = cells[j];
+	           c1 = particles[j];
                f = Force(c0, c1);
+               double dx = (c1.x - c0.x);
+               double dy = (c1.y - c0.y);
+               double adx = dx;
+               double ady = dy;
+               
                if (cbWrap.Checked)
                {
-                  sfx += f * ((Math.Abs(c0.x - c1.x) > maxx / 2) ? (maxx - Math.Abs(c0.x - c1.x)) * Math.Sign(c1.x - c0.x) : (c0.x - c1.x));
-                  sfy += f * ((Math.Abs(c0.y - c1.y) > maxy / 2) ? (maxy - Math.Abs(c0.y - c1.y)) * Math.Sign(c1.y - c0.y) : (c0.y - c1.y));
+                  sfx += f * ((adx > maxx / 2) ? (maxx - adx) * Math.Sign(dx) : -dx) / Math.Sqrt(adx * adx + ady * ady);
+                  sfy += f * ((ady > maxy / 2) ? (maxy - ady) * Math.Sign(dy) : -dy) / Math.Sqrt(adx * adx + ady * ady);
                } else
                {
-                  sfx += f * (c0.x - c1.x);
-                  sfy += f * (c0.y - c1.y);
+               	  sfx += f * (-dx) / Math.Sqrt(adx * adx + ady * ady);
+                  sfy += f * (-dx) / Math.Sqrt(adx * adx + ady * ady);
                }
             }
          }
-         c0.dx += sfx / (cells.Count - 1);
-         c0.dy += sfy / (cells.Count - 1);
+         c0.dx += sfx / (particles.Count / 2 - 1);
+         c0.dy += sfy / (particles.Count / 2 - 1);
          c0.dx *= dumpFactor;
          c0.dy *= dumpFactor;
       }
 
-      for(int i = 0; i < cells.Count; i++)
+      for(int i = 0; i < particles.Count; i++)
       {
       	double ox, oy;
-      	ox = cells[i].x;
-      	oy = cells[i].y;
-      	cells[i].Move();
-      	double nx = cells[i].x;
-      	double ny = cells[i].y;
+      	ox = particles[i].x;
+      	oy = particles[i].y;
+      	particles[i].Move();
+      	double nx = particles[i].x;
+      	double ny = particles[i].y;
       	if (cbWrap.Checked)
       	{
       		nx = (nx + maxx) % maxx;
@@ -144,8 +155,8 @@ namespace Forces
       	{
       	   if (cbSpring.Checked)
       	   {
-      	      if ((nx < 0) || (nx > maxx - 1)) cells[i].dx *= -dumpFactor;
-      	      if ((ny < 0) || (ny > maxy - 1)) cells[i].dy *= -dumpFactor;
+      	      if ((nx < 0) || (nx > maxx - 1)) particles[i].dx *= -dumpFactor;
+      	      if ((ny < 0) || (ny > maxy - 1)) particles[i].dy *= -dumpFactor;
       	   } 
       	   
            if (nx < 0) { if (nx < -BORDR) nx = rnd.Next(maxx); else nx = 0; }
@@ -154,10 +165,10 @@ namespace Forces
            if (ny > maxy - 1) { if (ny > maxy + BORDR) ny = rnd.Next(maxy); else ny = maxy - 1; }
       	}
       	
-        cells[i].x = nx;
-        cells[i].y = ny;
+        particles[i].x = nx;
+        particles[i].y = ny;
       	
-        moved += Math.Abs(ox - cells[i].x) + Math.Abs(oy - cells[i].y);
+        moved += Math.Abs(ox - particles[i].x) + Math.Abs(oy - particles[i].y);
       }
 
       return moved;
@@ -165,20 +176,26 @@ namespace Forces
 
    bool inRun = false;
    int frmCnt = 0;
+   int prevSec = 1000;
    public void Run()
    {
-      frmCnt++;
       if (!inRun)
       {
+   	DateTime dt = DateTime.Now;
+   	if (prevSec != dt.Second)
+   	{
+        lblInfo.Text =  "Frames " + string.Format("{0:####}", frmCnt);
+        frmCnt = 0;
+        prevSec = dt.Second;
+   	}
+   	frmCnt++;
+
          inRun = true;
       double res = move();
    	  show(panel1.CreateGraphics());
    	  //if (res < 1) InitCells(cellNumber);
 //   	  lblInfo.Text =  "Moved " + string.Format("{0:###.00}", res);
-if (frmCnt > 1)
-        lblInfo.Text =  "Frames " + string.Format("{0:####}", frmCnt);
         inRun = false;
-        frmCnt = 0;
       }
    }
 
@@ -193,9 +210,9 @@ if (frmCnt > 1)
 			// TODO: Add constructor code after the InitializeComponent() call.
 			//
 			numericUpDown1.Value = timer1.Interval;
-			cellNumber = (int)numericUpDown2.Value;
+			particlesNumber = (int)numericUpDown2.Value;
 			dumpFactor = 1.0 - ((double)numUDdumpFactor.Value / 1000.0);
-			InitCells(cellNumber);
+			InitParticles();
 			
 			Run();
     
@@ -209,7 +226,7 @@ if (frmCnt > 1)
 		void BtRunClick(object sender, EventArgs e)
 		{
 		   if (cbAuto.Checked)
-		      InitCells(cellNumber);
+		      InitParticles();
 		   else
 		      Run();
 		}
@@ -235,8 +252,8 @@ if (frmCnt > 1)
 		
 		void NumericUpDown2ValueChanged(object sender, EventArgs e)
 		{
-			cellNumber = (int)numericUpDown2.Value;
-			InitCells(cellNumber);
+			particlesNumber = (int)numericUpDown2.Value;
+			InitParticles();
 			if (!cbAuto.Checked)
 			   show(panel1.CreateGraphics());
 		}
